@@ -28,6 +28,7 @@ PinTypeHelper::PinTypeHelper(QWidget *parent) :
     });
 
     // not sure which is better -- this approach, or a new HoverLabel class inheriting from QLabel
+    // [Reviewed 2026-07-26: design note only; current approach works, no action needed]
     for (auto &&c : ui->groupBox->children()) {
         QLabel *label = qobject_cast<QLabel*>(c);
         if (!label) continue;

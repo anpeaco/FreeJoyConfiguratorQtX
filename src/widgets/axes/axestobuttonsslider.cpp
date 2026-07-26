@@ -76,6 +76,8 @@ int AxesToButtonsSlider::activeButtonForValue() const
     return -1;
 }
 
+// [Reviewed 2026-07-26] Micro-opt note only; not a hot path (this slider paints on
+// interaction, not per device packet). Left as-is.
 void AxesToButtonsSlider::paintEvent(QPaintEvent *event) // optimise width_ - offset_*2
 {
     Q_UNUSED(event)

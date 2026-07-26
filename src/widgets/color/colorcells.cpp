@@ -298,6 +298,8 @@ void QWellArray::keyPressEvent(QKeyEvent* e)
         break;
 #if 0
     // bad idea that shouldn't have been implemented; very counterintuitive
+    // [Reviewed 2026-07-26] Already disabled by the surrounding #if 0; kept only as
+    // documented rationale for why Return/Enter isn't handled here. No action needed.
     case Qt::Key_Return:
     case Qt::Key_Enter:
         /*

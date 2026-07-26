@@ -276,7 +276,7 @@ void PinComboBox::setIndex_iteraction(int index, int senderIndex)
 //! Set pin items
 void PinComboBox::initializationPins(uint pin)      // pin_number_ - 1 -- not great
 {                                                   // this is because the empty values of const cBox pin_types_[PIN_TYPE_COUNT]
-    m_pinNumber = pin;                              // initialise to 0, making the code hard to follow. May rewrite.
+    m_pinNumber = pin;                              // initialise to 0, making the code hard to follow. May rewrite.  [Reviewed 2026-07-26: readability only, no bug; left as-is]
 
     /* Clear combobox + parallel index arrays so re-init from setExcludedRoles
      * doesn't accumulate items / duplicate sentinel rows on top of the

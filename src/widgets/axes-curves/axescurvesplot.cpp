@@ -97,7 +97,7 @@ void AxesCurvesPlot::paintEvent(QPaintEvent *event)
 //                         m_pointPtrList[i + 1]->posX, m_pointPtrList[i + 1]->posY);
     }
 
-    // coordinates for ellipse mousOver //250 78    // can be optimized
+    // coordinates for ellipse mousOver //250 78    // can be optimized  [Reviewed 2026-07-26: minor, low priority; left as-is]
     for (int i = 0; i < m_pointPtrList.size(); ++i) {
         m_pointPtrList[i]->area.setRect(m_pointPtrList[i]->posX - m_radius, m_pointPtrList[i]->posY - m_radius,
                                       m_radius*2, m_radius*2);

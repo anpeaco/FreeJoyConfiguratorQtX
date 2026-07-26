@@ -2,10 +2,13 @@
 #define DEBUGWINDOW_H
 
 #include <QWidget>
+#include <QFile>
+#include <QString>
 
 namespace Ui {
 class DebugWindow;
 }
+class QTimer;
 
 class DebugWindow : public QWidget
 {
@@ -56,6 +59,12 @@ private slots:
     void on_pushButton_LogMarker_clicked();
     void on_pushButton_LogClear_clicked();
 
+    /* Flush buffered log lines into the view in one batched insert (~10 Hz).
+     * appendLine() only appends to m_viewBuffer -- the actual QTextBrowser
+     * insertHtml, whose cost grows with document size, is moved OFF the per-line
+     * (per-params-packet) hot path so high-rate logging can't stall the UI. */
+    void flushViewBuffer();
+
 private:
     Ui::DebugWindow *ui;
 
@@ -65,6 +74,23 @@ private:
     void appendToLogFile(const QString &line);
 
     bool m_writeToFile;
+
+    /* Persistent handle for the on-disk log. Kept OPEN across lines so we don't
+     * pay a QFile::open()/close() per logged line. That syscall pair stalls the
+     * UI thread for tens of ms per line when the log dir is on a cloud-synced
+     * folder (OneDrive intercepts open/close for sync), which froze the app
+     * during high-rate logging -- e.g. a fast-spun encoder flooding button-edge
+     * lines. Reopened only when the date rolls over. See appendToLogFile. */
+    QFile   m_logFile;
+    QString m_logFileDate;
+
+    /* Batched view rendering (see flushViewBuffer). m_viewBuffer accumulates
+     * rendered HTML lines between flushes; m_viewLines bounds the view so its
+     * insert cost can't grow without limit over a long session (the on-disk file
+     * keeps the full history). */
+    QString m_viewBuffer;
+    QTimer *m_viewTimer = nullptr;
+    int     m_viewLines = 0;
 };
 
 #endif // DEBUGWINDOW_H

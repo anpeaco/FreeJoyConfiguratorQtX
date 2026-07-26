@@ -21,6 +21,11 @@ static const int OLD_FIRMWARE_VID = 0x0483;
 // sience FJ v1.7 REPORT_ID_FIRMWARE = 5 but flasher has = 4
 static const int REPORT_ID_FLASH = 4;
 
+// [Reviewed 2026-07-26] Structural debt, but NOT a live-feedback bottleneck: the
+// firmware streams params from its tick ISR and this loop keeps up (the read
+// throttles below only back off for incompatible firmware). The measured perf
+// lever is elsewhere (the 1 Hz flushUiToConfig poll). A rewrite for clarity is
+// worthwhile but deferred -- it needs on-hardware USB validation.
 void HidDevice::processData()                   /////// bad code, I'll try to rewrite later
 {
     // Mutex is used for thread-safe access to m_currentWork and m_ledState 
@@ -379,8 +384,15 @@ void HidDevice::processData()                   /////// bad code, I'll try to re
                         if (buffer[0] == REPORT_ID_PARAM) {   // safety check
                             memset(deviceBuffer, 0, BUFFERSIZE);
                             memcpy(deviceBuffer, buffer, BUFFERSIZE);
-                            if (ReportConverter::paramReport(deviceBuffer) == -1) continue;
-                            if (ReportConverter::paramReport(deviceBuffer)) { // datarace?
+                            // Parse ONCE and reuse the result. This used to call
+                            // ReportConverter::paramReport(deviceBuffer) twice per
+                            // packet (a full parse of the report each time); the
+                            // second call also raced the first's side effects
+                            // (hence the old "datarace?" note). One call is both
+                            // cheaper and correct.
+                            const int parseResult = ReportConverter::paramReport(deviceBuffer);
+                            if (parseResult == -1) continue;
+                            if (parseResult) {
                                 emit paramsPacketReceived(true);
                             } else {
                                 emit paramsPacketReceived(false);
@@ -397,6 +409,9 @@ void HidDevice::processData()                   /////// bad code, I'll try to re
                     #endif
                 }
                 // write config to device
+                // [Reviewed 2026-07-26] Live path, NOT dead: m_currentWork is set to
+                // REPORT_ID_CONFIG_OUT by the config-send trigger (~line 1033). "rarely
+                // triggers" just reflects that most reads are params. Left as-is.
                 else if (currentWork == REPORT_ID_CONFIG_OUT) { ////////////// works badly. rarely triggers
                     writeConfigToDevice(buffer);
                     // disconnect all devices

@@ -2,7 +2,9 @@
 
 #include <QDebug>
 FirmwareUpdater::FirmwareUpdater() {}
-// not sure why this needs to be a static permanently resident in memory
+// [Reviewed 2026-07-26] It's a 256-entry CRC lookup table (512 bytes). A static
+// member is fine here -- the RAM cost is negligible and it's built once. Could be
+// made const / computed lazily, but there's nothing to fix.
 uint16_t FirmwareUpdater::table[256]{};
 unsigned short FirmwareUpdater::computeChecksum(const QByteArray *fileBytes)
 {

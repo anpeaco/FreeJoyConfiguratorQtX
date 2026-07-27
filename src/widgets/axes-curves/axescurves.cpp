@@ -61,7 +61,7 @@ void AxesCurves::pointValueChanged(int pointNumber, int value)
     Q_UNUSED(value)
     for (int i = 0; i < m_curvesList.size(); ++i) {
         if (m_curvesList[i]->isChecked()) {
-            for (int j = 0; j < CURVE_PLOT_POINTS_COUNT; ++j) {     // can be optimized
+            for (int j = 0; j < CURVE_PLOT_POINTS_COUNT; ++j) {     // can be optimized  [Reviewed 2026-07-26: minor, low priority; left as-is]
                 m_curvesList[i]->setPointValue(j, ui->widget_AxesCurvesPlot->pointValue(j));
             }
         }

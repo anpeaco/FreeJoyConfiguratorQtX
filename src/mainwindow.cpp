@@ -203,17 +203,22 @@ MainWindow::MainWindow(QWidget *parent)
     m_buttonConfig = new ButtonConfig(this);
     ui->layoutV_tabButtonConfig->addWidget(m_buttonConfig);
     qDebug()<<"button config load time ="<< timer.restart() << "ms";
-    // add shifts & timers widget
+    // add shifts & timers widget. Shifts (configured as button_t entries via
+    // ShiftButtonConfig) sit in a group box at the TOP of this tab, above the
+    // global timers -- they were briefly a standalone "Shifts" tab.
     m_shiftsTimersConfig = new ShiftsTimersConfig(this);
-    ui->layoutV_tabShiftsTimers->addWidget(m_shiftsTimersConfig);
-
-    // Dedicated Shifts tab (wire gen 0x0060): shift modifiers configured as
-    // button_t entries, inserted right after the Buttons tab.
     m_shiftButtonConfig = new ShiftButtonConfig(this);
-    ui->tabWidget->insertTab(ui->tabWidget->indexOf(ui->tab_ButtonConfig) + 1,
-                             m_shiftButtonConfig, tr("Shifts"));
-    // Shifts moved out of the old "Shifts & Timers" tab -> rename it "Timers".
-    ui->tabWidget->setTabText(ui->tabWidget->indexOf(ui->tab_ShiftsTimers), tr("Timers"));
+
+    auto *shiftsGroup = new QGroupBox(tr("Shifts"), this);
+    auto *shiftsGroupLayout = new QVBoxLayout(shiftsGroup);
+    shiftsGroupLayout->setContentsMargins(6, 6, 6, 6);
+    shiftsGroupLayout->addWidget(m_shiftButtonConfig);
+    // Shifts group is compact at the top; the timers widget below expands to
+    // fill the remaining tab height (it carries its own trailing spacer).
+    shiftsGroup->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
+    m_shiftsTimersConfig->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
+    ui->layoutV_tabShiftsTimers->addWidget(shiftsGroup);
+    ui->layoutV_tabShiftsTimers->addWidget(m_shiftsTimersConfig);
     qDebug()<<"shifts/timers config load time ="<< timer.restart() << "ms";
     // add axes widget
     m_axesConfig = new AxesConfig(this);
@@ -968,13 +973,10 @@ void MainWindow::getParamsPacket(bool firmwareCompatible)
     if(ui->tab_ButtonConfig->isVisible() == true || m_debugWindow) {
         m_buttonConfig->buttonStateChanged();
     }
-    // Shift activation indicators live on the Shifts & Timers tab now;
-    // refresh them whenever that tab is visible so the green highlight
-    // tracks the device's current shift state.
-    if(ui->tab_ShiftsTimers->isVisible() == true || m_debugWindow) {
-        m_shiftsTimersConfig->shiftStateChanged();
-    }
-    // Dedicated Shifts tab: same live active-shift feedback on its rows.
+    // Live active-shift feedback: ShiftButtonConfig owns the shift rows now, so
+    // its shiftStateChanged() is the only one that does work. (ShiftsTimersConfig::
+    // shiftStateChanged() became a no-op when shifts moved off that widget, so the
+    // per-packet call to it was removed.)
     if (m_shiftButtonConfig->isVisible() || m_debugWindow) {
         m_shiftButtonConfig->shiftStateChanged();
     }

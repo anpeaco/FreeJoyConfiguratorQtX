@@ -77,8 +77,15 @@ PinConfig::PinConfig(QWidget *parent) :         // pin handling was the first th
     // board change below.
     applyBoardSpecificRoleFilters();
 
+    // [Reviewed 2026-07-26] valgrind flags the PinComboBoxes (allocated above) as
+    // leaked at this connect site, but it's a "still reachable at exit" false
+    // positive, not a
+    // real leak. They're new'd with parent `this` (bounded: one per pin), so Qt
+    // frees them with PinConfig; board switching reparents them between the board
+    // widgets and only ever deletes the detached QLayoutItem (boardChanged), never
+    // the widgets. Nothing to fix here.
     for (int i = 0; i < m_pinCBoxPtrList.size(); ++i) {
-            connect(m_pinCBoxPtrList[i], &PinComboBox::valueChangedForInteraction,       // valgrind reports a leak here -- why?
+            connect(m_pinCBoxPtrList[i], &PinComboBox::valueChangedForInteraction,
                         this, &PinConfig::pinInteraction);
             connect(m_pinCBoxPtrList[i], &PinComboBox::currentIndexChanged,
                         this, &PinConfig::pinIndexChanged);

@@ -12,10 +12,11 @@ ShiftsTimersConfig::ShiftsTimersConfig(QWidget *parent)
 {
     ui->setupUi(this);
 
-    /* Shift modifiers live on the dedicated Shifts tab (wire gen 0x0070); the
-     * old per-shift spinbox group was removed from this tab, which now hosts only
-     * the global timers. (Relocating the timers to the Advanced tab is a
-     * wire-independent follow-up.) */
+    /* This widget hosts only the global timers. Shift modifiers (wire gen 0x0070)
+     * are a separate ShiftButtonConfig widget placed in a "Shifts" group box above
+     * this one on the same Shifts & Timers tab (see MainWindow ctor); the old
+     * per-shift spinbox group that used to live here was removed. (Relocating the
+     * timers to the Advanced tab is a wire-independent follow-up.) */
 
     // Polling spinboxes round to TICKS_NS multiples on user edit. Same
     // helper that ButtonConfig used to own.
@@ -44,18 +45,26 @@ ShiftsTimersConfig::ShiftsTimersConfig(QWidget *parent)
      * would render stale "(X ms)" suffixes until Write was clicked.
      * Fires on user edits AND on readFromConfig's setValue calls --
      * same path either way. */
+    // Each handler dereferences gEnv.pDeviceConfig, so bail if there's no config
+    // yet (matches the guard in ShiftButtonConfig::shiftStateChanged). Harmless
+    // today because the connects are made after setupUi -- so no spurious
+    // valueChanged fires during construction -- but keeps the deref safe if that
+    // ordering ever changes.
     connect(ui->spinBox_Timer1, qOverload<int>(&QSpinBox::valueChanged),
             this, [this](int v) {
+                if (gEnv.pDeviceConfig == nullptr) return;
                 gEnv.pDeviceConfig->config.button_timer1_ms = v;
                 emit buttonTimersChanged();
             });
     connect(ui->spinBox_Timer2, qOverload<int>(&QSpinBox::valueChanged),
             this, [this](int v) {
+                if (gEnv.pDeviceConfig == nullptr) return;
                 gEnv.pDeviceConfig->config.button_timer2_ms = v;
                 emit buttonTimersChanged();
             });
     connect(ui->spinBox_Timer3, qOverload<int>(&QSpinBox::valueChanged),
             this, [this](int v) {
+                if (gEnv.pDeviceConfig == nullptr) return;
                 gEnv.pDeviceConfig->config.button_timer3_ms = v;
                 emit buttonTimersChanged();
             });

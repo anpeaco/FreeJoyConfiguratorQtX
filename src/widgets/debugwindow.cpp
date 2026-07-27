@@ -6,6 +6,7 @@
 #include <QFile>
 #include <QTextStream>
 #include <QTime>
+#include <QTimer>
 #include <QSettings>
 
 #include "global.h"
@@ -127,6 +128,15 @@ DebugWindow::DebugWindow(QWidget *parent)
      * correct even before the pane is opened. Advanced re-pushes changes via
      * setWriteToFile(). */
     m_writeToFile = logEnabled;
+
+    /* Render buffered log lines into the view in batches (~10 Hz) rather than one
+     * insertHtml per line. Per-line insert cost grows with the document and ran on
+     * the params-packet hot path, so high-rate logging (fast encoder) stalled the
+     * UI. appendLine() now just buffers; this timer does the (bounded) insert. */
+    m_viewTimer = new QTimer(this);
+    m_viewTimer->setInterval(100);
+    connect(m_viewTimer, &QTimer::timeout, this, &DebugWindow::flushViewBuffer);
+    m_viewTimer->start();
 }
 
 DebugWindow::~DebugWindow()
@@ -142,6 +152,11 @@ void DebugWindow::retranslateUi()
 void DebugWindow::setWriteToFile(bool on)
 {
     m_writeToFile = on;
+    /* Release the handle when logging is turned off so the file isn't held open
+     * indefinitely; it reopens lazily on the next line if re-enabled. */
+    if (!on && m_logFile.isOpen()) {
+        m_logFile.close();
+    }
 }
 
 void DebugWindow::appendProgressLine(const QString &line)
@@ -167,21 +182,35 @@ void DebugWindow::appendToLogFile(const QString &line)
      * month again, not minute) and ':' is illegal in Windows file
      * names, so the previous version's QFile::open silently failed
      * EVERY time. Daily granularity is enough for log review. */
-    const QString logDir = gEnv.pAppSettings->fileName().remove("FreeJoySettings.conf") + "log/";
-    /* mkpath the log dir if missing; otherwise QFile::open fails on a
-     * fresh install where the user enabled logging before anything
-     * created <Documents>/FreeJoy/log/. */
-    QDir().mkpath(logDir);
     const QString date(QDateTime::currentDateTime().toString("yyyy-MM-dd"));
-    QFile file(logDir + "FJLog" + date + ".txt");
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Append)) {
-        /* Silent fail -- qWarning here would route through the message
-         * handler back into printMsg -> appendToLogFile and recurse into
-         * the same failing open. */
-        return;
+
+    /* Open the day's file ONCE and keep the handle open; only (re)open when it
+     * isn't open yet or the date rolled over. Opening/closing per line paid a
+     * syscall pair that OneDrive intercepts for sync -- tens of ms per line -- and
+     * that ran on the UI thread inside the params-packet fan-out, so high-rate
+     * button-edge logging (a fast-spun encoder) froze the app. Keeping the handle
+     * open removes that cost; write()+flush() on an already-open handle does not
+     * trigger the same sync stall. */
+    if (!m_logFile.isOpen() || date != m_logFileDate) {
+        if (m_logFile.isOpen()) m_logFile.close();
+        const QString logDir = gEnv.pAppSettings->fileName().remove("FreeJoySettings.conf") + "log/";
+        /* mkpath the log dir if missing; otherwise open fails on a fresh install
+         * where the user enabled logging before anything created the dir. */
+        QDir().mkpath(logDir);
+        m_logFile.setFileName(logDir + "FJLog" + date + ".txt");
+        if (!m_logFile.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
+            /* Silent fail -- qWarning here would route through the message handler
+             * back into printMsg -> appendToLogFile and recurse into the same
+             * failing open. */
+            return;
+        }
+        m_logFileDate = date;
     }
-    QTextStream out(&file);
-    out << line;
+
+    /* Flush per line so the log stays crash-resilient; flushing an open handle is
+     * far cheaper than the open/close it replaces. */
+    m_logFile.write(line.toUtf8());
+    m_logFile.flush();
 }
 
 void DebugWindow::appendLine(LogLevel level, const QString &msg)
@@ -210,11 +239,29 @@ void DebugWindow::appendLine(LogLevel level, const QString &msg)
     const QString html = stamp.toHtmlEscaped() + QStringLiteral(" ") + tagHtml
                        + QStringLiteral(" ") + msg.toHtmlEscaped();
 
-    ui->textBrowser_Log->moveCursor(QTextCursor::End);
-    ui->textBrowser_Log->insertHtml(html + QStringLiteral("<br>"));
-    ui->textBrowser_Log->moveCursor(QTextCursor::End);
+    // Buffer only -- flushViewBuffer() does the batched insert off the hot path.
+    m_viewBuffer += html + QStringLiteral("<br>");
 
     appendToLogFile(plain + '\n');
+}
+
+void DebugWindow::flushViewBuffer()
+{
+    if (m_viewBuffer.isEmpty()) return;
+
+    m_viewLines += m_viewBuffer.count(QStringLiteral("<br>"));
+    ui->textBrowser_Log->moveCursor(QTextCursor::End);
+    ui->textBrowser_Log->insertHtml(m_viewBuffer);
+    ui->textBrowser_Log->moveCursor(QTextCursor::End);
+    m_viewBuffer.clear();
+
+    /* Bound the view so a long high-rate session can't grow the insert cost
+     * without limit. The on-disk log keeps the full history; only the scrollback
+     * in this widget is trimmed. ~10k lines is plenty for eyeballing. */
+    if (m_viewLines > 10000) {
+        ui->textBrowser_Log->clear();
+        m_viewLines = 0;
+    }
 }
 
 void DebugWindow::printMsg(const QString &msg, int level)
@@ -244,6 +291,8 @@ void DebugWindow::on_pushButton_LogClear_clicked()
     // Clears the in-app view only; the on-disk log file is untouched. Also the
     // "since reset" point for the per-button fire tallies -- and tells the
     // Encoders tab to zero its matching per-row counters at the same instant.
+    m_viewBuffer.clear();
+    m_viewLines = 0;
     ui->textBrowser_Log->clear();
     resetFireCounts();
     emit fireCountsCleared();

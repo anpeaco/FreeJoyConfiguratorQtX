@@ -35,3 +35,6 @@ screenshot_*.png
 # local firmware binaries + test scratch output
 /Firmware/
 tests/*.txt
+# shadow-build dirs for the test harnesses (one per run, never committed)
+tests/build_*/
+tests/rc_test_*/
